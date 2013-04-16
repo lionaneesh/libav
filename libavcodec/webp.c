@@ -36,7 +36,6 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     int ret;
     GetByteContext g;
     unsigned int size, chunk_size;
-    
     bytestream2_init(&g, avpkt->data, avpkt->size);
 
     if (bytestream2_get_bytes_left(&g) < 12)
@@ -67,7 +66,6 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                 bytestream2_skip(&g, chunk_size - 4);
         }
     }
-    
     avctx->width   = 800;
     avctx->height  = 600;
     avctx->pix_fmt = AV_PIX_FMT_YUV420P;
@@ -77,9 +75,9 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         return ret;
     }
     
-    memset(p->data[0], 0,    p->linesize[0]);
-    memset(p->data[1], 100, p->linesize[1]);
-    memset(p->data[2], 100, p->linesize[2]);
+    memset(p->data[0], 0,    p->linesize[0] * avctx->height);
+    memset(p->data[1], 0x80, p->linesize[1] * avctx->height / 2);
+    memset(p->data[2], 0x80, p->linesize[2] * avctx->height / 2);
     
     p->pict_type = AV_PICTURE_TYPE_I;
     *got_frame = 1;
