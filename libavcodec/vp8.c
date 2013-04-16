@@ -1848,7 +1848,7 @@ static int vp8_decode_mb_row_sliced(AVCodecContext *avctx, void *tdata,
     return 0;
 }
 
-static int vp8_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
+int vp8_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                             AVPacket *avpkt)
 {
     VP8Context *s = avctx->priv_data;
@@ -2027,7 +2027,7 @@ static av_cold int vp8_init_frames(VP8Context *s)
     return 0;
 }
 
-static av_cold int vp8_decode_init(AVCodecContext *avctx)
+av_cold int vp8_decode_init(AVCodecContext *avctx)
 {
     VP8Context *s = avctx->priv_data;
     int ret;

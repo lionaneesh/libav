@@ -35,7 +35,7 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     AVFrame * const p = data;
     int ret;
     GetByteContext g;
-    unsigned int size, chunk_size;
+    unsigned int size;
     bytestream2_init(&g, avpkt->data, avpkt->size);
 
     if (bytestream2_get_bytes_left(&g) < 12)
@@ -58,10 +58,17 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         unsigned int chunk_size = bytestream2_get_le32(&g);
         
         switch (chunk_type) {
-            case MKTAG('V', 'P', '8', ' '):
-                // decoding goes here
-                bytestream2_skip(&g, chunk_size - 4);
-                break;
+            case MKTAG('V', 'P', '8', ' '): {
+                AVPacket pkt;
+
+                if (bytestream2_get_bytes_left(&g) < chunk_size)
+                    return AVERROR_INVALIDDATA;
+
+                av_init_packet(&pkt);
+                pkt.data = g.buffer;
+                pkt.size = chunk_size;
+                return vp8_decode_frame(avctx, data, got_frame, &pkt);
+            }
             default :
                 bytestream2_skip(&g, chunk_size - 4);
         }
@@ -86,6 +93,7 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
 
 static av_cold int webp_decode_init(AVCodecContext *avctx)
 {
+    vp8_decode_init(avctx);
     return 0;
 }
 
