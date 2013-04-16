@@ -36,6 +36,7 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     int ret;
     GetByteContext g;
     unsigned int size;
+
     bytestream2_init(&g, avpkt->data, avpkt->size);
 
     if (bytestream2_get_bytes_left(&g) < 12)
@@ -45,18 +46,18 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         av_log(avctx, AV_LOG_ERROR, "missing RIFF tag\n");
         return AVERROR_INVALIDDATA;
     }
-    
+
     size = bytestream2_get_le32(&g);
 
     if (bytestream2_get_le32(&g) != MKTAG('W', 'E', 'B', 'P')) {
         av_log(avctx, AV_LOG_ERROR, "missing WEBP tag\n");
         return AVERROR_INVALIDDATA;
     }
-    
+
     while (bytestream2_get_bytes_left(&g) > 0) {
         unsigned int chunk_type = bytestream2_get_le32(&g);
         unsigned int chunk_size = bytestream2_get_le32(&g);
-        
+
         switch (chunk_type) {
             case MKTAG('V', 'P', '8', ' '): {
                 AVPacket pkt;
@@ -76,16 +77,16 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     avctx->width   = 800;
     avctx->height  = 600;
     avctx->pix_fmt = AV_PIX_FMT_YUV420P;
-    
+
     if ((ret = ff_get_buffer(avctx, p, 0)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return ret;
     }
-    
+
     memset(p->data[0], 0,    p->linesize[0] * avctx->height);
     memset(p->data[1], 0x80, p->linesize[1] * avctx->height / 2);
     memset(p->data[2], 0x80, p->linesize[2] * avctx->height / 2);
-    
+
     p->pict_type = AV_PICTURE_TYPE_I;
     *got_frame = 1;
     return avpkt->size;
