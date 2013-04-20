@@ -23,7 +23,6 @@
 #include "avcodec.h"
 #include "internal.h"
 #include "vp8.h"
-#include "get_bits.h"
 
 typedef struct WebP_VP8X {
     // uint8_t rsv;
