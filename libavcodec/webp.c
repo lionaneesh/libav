@@ -24,25 +24,19 @@
 #include "internal.h"
 #include "vp8.h"
 
-typedef struct WebP_VP8X {
-    // uint8_t rsv;
-    uint8_t icc;
-    uint8_t alpha;
-    uint8_t exif_metadata;
-    uint8_t xmp_metadata;
-    uint8_t animation;
-    // uint8_t rsv2;
-    // uint24_t rsv3;
-    int width;
-    int height;
-} WebP_VP8X;
+#define VP8X_FLAG_ANIMATION     0x2
+#define VP8X_FLAG_XMP_METADATA  0x4
+#define VP8X_FLAG_EXIF_METADATA 0x8
+#define VP8X_FLAG_ALPHA         0x10
+#define VP8X_FLAG_ICC           0x20
 
 typedef struct WebPContext {
     VP8Context v;
     int initialized;
     GetByteContext alpha_bitstream_g;
-    int alpha_bitstream_size;
-    WebP_VP8X vp8x;
+    uint8_t has_alpha;
+    int width;
+    int height;
 } WebPContext;
 
 static int vp8_lossless_decode_frame(AVCodecContext *avctx, AVFrame *p,
@@ -83,7 +77,7 @@ static int vp8_lossy_decode_frame(AVCodecContext *avctx, AVFrame *p,
     if (!s->initialized) {
         vp8_decode_init(avctx);
         s->initialized = 1;
-        if (s->alpha_bitstream_size > 0)
+        if (s->has_alpha)
             avctx->pix_fmt = AV_PIX_FMT_YUVA420P;
     }
 
@@ -97,12 +91,12 @@ static int vp8_lossy_decode_frame(AVCodecContext *avctx, AVFrame *p,
     pkt.size = data_size;
 
     ret = vp8_decode_frame(avctx, p, got_frame, &pkt);
-    if (s->alpha_bitstream_size > 0) {
+    if (s->has_alpha) {
         int y;
-        for (y = 0; y < s->vp8x.height; y++)
+        for (y = 0; y < s->height; y++)
             bytestream2_get_buffer(&s->alpha_bitstream_g,
-                                   p->data[3] + p->linesize[3] * y + 1,
-                                   s->vp8x.width);
+                                   p->data[3] + p->linesize[3] * y,
+                                   s->width);
     }
     return ret;
 }
@@ -115,11 +109,12 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     GetByteContext g;
     int ret;
     unsigned int chunk_type, chunk_size;
+    uint8_t vp8x_flags;
 
-    s->vp8x.width  = 0;
-    s->vp8x.height = 0;
+    s->width  = 0;
+    s->height = 0;
     *got_frame = 0;
-    s->alpha_bitstream_size = 0;
+    s->has_alpha = 0;
     bytestream2_init(&g, avpkt->data, avpkt->size);
 
     if (bytestream2_get_bytes_left(&g) < 12)
@@ -171,31 +166,22 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
             bytestream2_skip(&g, chunk_size);
             break;
         case MKTAG('V', 'P', '8', 'X'): {
-                uint8_t info_bits;
-
-                info_bits = bytestream2_get_byte(&g);
+                vp8x_flags = bytestream2_get_byte(&g);
                 bytestream2_skip(&g, 3);
-
-                //s->vp8x.rsv2          = info_bits >> 0 & 0x1;
-                s->vp8x.animation     = info_bits >> 1 & 0x1;
-                s->vp8x.xmp_metadata  = info_bits >> 2 & 0x1;
-                s->vp8x.exif_metadata = info_bits >> 3 & 0x1;
-                s->vp8x.alpha         = info_bits >> 4 & 0x1;
-                s->vp8x.icc           = info_bits >> 5 & 0x1;
-                //s->vp8x.rsv           = info_bits >> 6 & 0xFF;
-
-                s->vp8x.width  = bytestream2_get_le24(&g) + 1;
-                s->vp8x.height = bytestream2_get_le24(&g) + 1;
+                s->width  = bytestream2_get_le24(&g) + 1;
+                s->height = bytestream2_get_le24(&g) + 1;
                 break;
         }
         case MKTAG('A', 'L', 'P', 'H'): {
             uint8_t alpha_header_data;
-            GetByteContext g_a = g;
-            int bitstream_size = s->vp8x.width * s->vp8x.height;
             uint8_t rsv, pre_p, filter_m, compression;
 
+            if (!(vp8x_flags & VP8X_FLAG_ALPHA))
+                av_log(avctx, AV_LOG_WARNING, "ALPHA chunk present, but alpha bit "\
+                                              "not set in the VP8X header\n");
+            s->alpha_bitstream_g = g;
             bytestream2_skip(&g, chunk_size);
-            alpha_header_data = bytestream2_get_byte(&g_a);
+            alpha_header_data = bytestream2_get_byte(&s->alpha_bitstream_g);
 
             rsv         = alpha_header_data >> 3 & 0x03;
             pre_p       = alpha_header_data >> 2 & 0x03;
@@ -208,10 +194,7 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                     av_log(avctx, AV_LOG_VERBOSE, "skipping unsupported ALPHA chunk\n");
                     break;
             }
-            s->alpha_bitstream_g    = g_a;
-            s->alpha_bitstream_size = bitstream_size;
-
-            av_log(avctx, AV_LOG_WARNING, "chunk_size: %d, bitstream_size: %d, compression: %d, rsv: %d, pre_p: %d, filter_m: %d\n", chunk_size, bitstream_size, compression, rsv, pre_p, filter_m);
+            s->has_alpha = 1;
 
             break;
         }
