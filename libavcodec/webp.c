@@ -99,10 +99,10 @@ static int vp8_lossy_decode_frame(AVCodecContext *avctx, AVFrame *p,
     ret = vp8_decode_frame(avctx, p, got_frame, &pkt);
     if (s->alpha_bitstream_size > 0) {
         int y;
-        for (y = 0; y < s->vp8x.height; y++) {
-            bytestream2_get_buffer(&s->alpha_bitstream_g, p->data[3] + p->linesize[3] * y + 1, s->vp8x.width);
-
-        }
+        for (y = 0; y < s->vp8x.height; y++)
+            bytestream2_get_buffer(&s->alpha_bitstream_g,
+                                   p->data[3] + p->linesize[3] * y + 1,
+                                   s->vp8x.width);
     }
     return ret;
 }
